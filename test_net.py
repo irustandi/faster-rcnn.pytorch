@@ -28,8 +28,7 @@ from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.utils.net_utils import save_net, load_net, vis_detections
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
+import model_factory
 
 import pdb
 
@@ -150,20 +149,7 @@ if __name__ == '__main__':
   load_name = os.path.join(input_dir,
     'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
 
-  # initilize the network here.
-  if args.net == 'vgg16':
-    fasterRCNN = vgg16(imdb.classes, pretrained=False, class_agnostic=args.class_agnostic)
-  elif args.net == 'res101':
-    fasterRCNN = resnet(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
-  elif args.net == 'res50':
-    fasterRCNN = resnet(imdb.classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
-  elif args.net == 'res152':
-    fasterRCNN = resnet(imdb.classes, 152, pretrained=False, class_agnostic=args.class_agnostic)
-  else:
-    print("network is not defined")
-    pdb.set_trace()
-
-  fasterRCNN.create_architecture()
+  fasterRCNN = model_factory.get_model(args, imdb)
 
   print("load checkpoint %s" % (load_name))
   checkpoint = torch.load(load_name)

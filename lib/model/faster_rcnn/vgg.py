@@ -13,19 +13,19 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import math
 import torchvision.models as models
-from model.faster_rcnn.faster_rcnn import _fasterRCNN
 import pdb
 
-class vgg16(_fasterRCNN):
-  def __init__(self, classes, pretrained=False, class_agnostic=False):
+
+class VGGBackBone(nn.Module):
+  def __init__(self, pretrained=False):
     self.model_path = 'data/pretrained_model/vgg16_caffe.pth'
-    self.dout_base_model = 512
+    self.dout_rpn = 512
+    self.dout_fts = 4096
     self.pretrained = pretrained
-    self.class_agnostic = class_agnostic
 
-    _fasterRCNN.__init__(self, classes, class_agnostic)
+    super(VGGBackBone, self).__init__()
 
-  def _init_modules(self):
+  def init_modules(self):
     vgg = models.vgg16()
     if self.pretrained:
         print("Loading pretrained weights from %s" %(self.model_path))
@@ -45,16 +45,7 @@ class vgg16(_fasterRCNN):
 
     self.RCNN_top = vgg.classifier
 
-    # not using the last maxpool layer
-    self.RCNN_cls_score = nn.Linear(4096, self.n_classes)
-
-    if self.class_agnostic:
-      self.RCNN_bbox_pred = nn.Linear(4096, 4)
-    else:
-      self.RCNN_bbox_pred = nn.Linear(4096, 4 * self.n_classes)      
-
-  def _head_to_tail(self, pool5):
-    
+  def head_to_tail(self, pool5):
     pool5_flat = pool5.view(pool5.size(0), -1)
     fc7 = self.RCNN_top(pool5_flat)
 

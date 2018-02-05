@@ -29,9 +29,8 @@ from roi_data_layer.roibatchLoader import roibatchLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.utils.net_utils import weights_normal_init, save_net, load_net, \
       adjust_learning_rate, save_checkpoint, clip_gradient
+import model_factory
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
 
 def parse_args():
   """
@@ -58,7 +57,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="/srv/share/jyang375/models",
+                      help='directory to save models', default="/home/indra/models",
                       nargs=argparse.REMAINDER)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of worker to load data',
@@ -239,20 +238,7 @@ if __name__ == '__main__':
   if args.cuda:
     cfg.CUDA = True
 
-  # initilize the network here.
-  if args.net == 'vgg16':
-    fasterRCNN = vgg16(imdb.classes, pretrained=True, class_agnostic=args.class_agnostic)
-  elif args.net == 'res101':
-    fasterRCNN = resnet(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
-  elif args.net == 'res50':
-    fasterRCNN = resnet(imdb.classes, 50, pretrained=True, class_agnostic=args.class_agnostic)
-  elif args.net == 'res152':
-    fasterRCNN = resnet(imdb.classes, 152, pretrained=True, class_agnostic=args.class_agnostic)
-  else:
-    print("network is not defined")
-    pdb.set_trace()
-
-  fasterRCNN.create_architecture()
+  fasterRCNN = model_factory.get_model(args, imdb)
 
   lr = cfg.TRAIN.LEARNING_RATE
   lr = args.lr

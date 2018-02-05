@@ -16,10 +16,10 @@ import time
 import pdb
 from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
 
-class _fasterRCNN(nn.Module):
+class FasterRCNN(nn.Module):
     """ faster RCNN """
-    def __init__(self, classes, class_agnostic):
-        super(_fasterRCNN, self).__init__()
+    def __init__(self, classes, class_agnostic, backbone):
+        super(FasterRCNN, self).__init__()
         self.classes = classes
         self.n_classes = len(classes)
         self.class_agnostic = class_agnostic
@@ -27,14 +27,22 @@ class _fasterRCNN(nn.Module):
         self.RCNN_loss_cls = 0
         self.RCNN_loss_bbox = 0
 
+        self.backbone = backbone
+
         # define rpn
-        self.RCNN_rpn = _RPN(self.dout_base_model)
+        self.RCNN_rpn = _RPN(self.backbone.dout_rpn)
         self.RCNN_proposal_target = _ProposalTargetLayer(self.n_classes)
         self.RCNN_roi_pool = _RoIPooling(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)
         self.RCNN_roi_align = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)
 
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         self.RCNN_roi_crop = _RoICrop()
+
+        self.RCNN_cls_score = nn.Linear(self.backbone.dout_fts, self.n_classes)
+        if self.class_agnostic:
+            self.RCNN_bbox_pred = nn.Linear(self.backbone.dout_fts, 4)
+        else:
+            self.RCNN_bbox_pred = nn.Linear(self.backbone.dout_fts, 4 * self.n_classes)
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -44,7 +52,7 @@ class _fasterRCNN(nn.Module):
         num_boxes = num_boxes.data
 
         # feed image data to base model to obtain base feature map
-        base_feat = self.RCNN_base(im_data)
+        base_feat = self.backbone.RCNN_base(im_data)
 
         # feed base feature map tp RPN to obtain rois
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
@@ -83,7 +91,7 @@ class _fasterRCNN(nn.Module):
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1,5))
 
         # feed pooled features to top model
-        pooled_feat = self._head_to_tail(pooled_feat)
+        pooled_feat = self.backbone.head_to_tail(pooled_feat)
 
         # compute bbox offset
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
@@ -106,7 +114,6 @@ class _fasterRCNN(nn.Module):
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
-
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
@@ -132,5 +139,5 @@ class _fasterRCNN(nn.Module):
         normal_init(self.RCNN_bbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
 
     def create_architecture(self):
-        self._init_modules()
+        self.backbone.init_modules()
         self._init_weights()
